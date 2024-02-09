@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { FastifyInstance } from "fastify"
 import { randomUUID } from "crypto"
+import { prisma } from "../lib/prisma"
 
 export async function voteOnPoll(app: FastifyInstance) {
   app.post('/polls/:pollId/votes', async (request, reply) => {
@@ -17,6 +18,23 @@ export async function voteOnPoll(app: FastifyInstance) {
 
     let { sessionId } = request.cookies
 
+    if (sessionId) {
+      const userPreviousVoteOnPoll = await prisma.vote.findUnique({
+        where: {
+          sessionId_pollId: {
+            sessionId,
+            pollId,
+          },
+        }
+      })
+
+      if (userPreviousVoteOnPoll) {
+        return reply.status(201).send({
+          message: 'You already voted on this poll.'
+        })
+      }
+    }
+
     if (!sessionId) {
       sessionId = randomUUID()
       
@@ -28,6 +46,14 @@ export async function voteOnPoll(app: FastifyInstance) {
       })
     }
 
-    return reply.status(201).send({sessionId})
+    await prisma.vote.create({
+      data: {
+        sessionId,
+        pollId,
+        pollOptionId,
+      }
+    })
+
+    return reply.status(201).send()
   })
 }
